@@ -11,6 +11,9 @@
 
 #include <string>
 #include "MultiMapTuple.h"
+#include "BinaryFile.h"
+using namespace std;
+
 
 class DiskMultiMap
 {
@@ -26,6 +29,8 @@ public:
         MultiMapTuple operator*();
         
     private:
+        bool m_isValid;
+        
         // Your private member declarations will go here
     };
     
@@ -39,6 +44,29 @@ public:
     int erase(const std::string& key, const std::string& value, const std::string& context);
     
 private:
+    BinaryFile m_file;
+    
+    struct BasicInfo{
+        unsigned int m_buckets;
+        unsigned int m_next_free;
+        unsigned int m_deleted_head;
+        unsigned int m_deleted_tail;
+    };
+    
+    BasicInfo m_bi;
+    hash<string> str_hash;
+
+    struct Node{
+        char* key;
+        char* value;
+        char* context;
+        unsigned int next_H=0;  //offset of next with same hash
+                                //value, different key.
+        unsigned int next_K=0;  //offset of next with same key
+        unsigned int offset=0;
+    };
+    
+    void deleteNode(unsigned int offset);
     // Your private member declarations will go here
 };
 
