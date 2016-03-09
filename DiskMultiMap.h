@@ -23,6 +23,7 @@ public:
     {
     public:
         Iterator();
+        Iterator(BinaryFile* bf, unsigned int cursor);
         // You may add additional constructors
         bool isValid() const;
         Iterator& operator++();
@@ -30,6 +31,9 @@ public:
         
     private:
         bool m_isValid;
+        unsigned int m_cursor;
+        BinaryFile* m_bf;
+
         
         // Your private member declarations will go here
     };
@@ -42,6 +46,9 @@ public:
     bool insert(const std::string& key, const std::string& value, const std::string& context);
     Iterator search(const std::string& key);
     int erase(const std::string& key, const std::string& value, const std::string& context);
+    
+    void runthrough();
+    
     
 private:
     BinaryFile m_file;
@@ -57,9 +64,9 @@ private:
     hash<string> str_hash;
 
     struct Node{
-        char* key;
-        char* value;
-        char* context;
+        char key[121];
+        char value[121];
+        char context[121];
         unsigned int next_H=0;  //offset of next with same hash
                                 //value, different key.
         unsigned int next_K=0;  //offset of next with same key

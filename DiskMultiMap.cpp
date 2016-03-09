@@ -31,7 +31,7 @@ bool DiskMultiMap::createNew(const std::string& filename, unsigned int numBucket
     m_bi.m_deleted_tail = 0;
     
     if(!m_file.write(numBuckets, 0) ||
-       !m_file.write((unsigned int) 12+numBuckets, 4) ||
+       !m_file.write((unsigned int) sizeof(Node)+sizeof(unsigned int)*numBuckets, 4) ||
        !m_file.write((unsigned int) 0, 8))
         return false;
     
@@ -58,8 +58,10 @@ bool DiskMultiMap::openExisting(const std::string& filename){
 }
 
 void DiskMultiMap::close(){
-    if(m_file.isOpen())
+    if(m_file.isOpen()){
+        m_file.write(m_bi, 0);
         m_file.close();
+    }
 }
 
 bool DiskMultiMap::insert(const std::string& key, const std::string& value, const std::string& context){
@@ -70,16 +72,12 @@ bool DiskMultiMap::insert(const std::string& key, const std::string& value, cons
     if(key.length()>120 || value.length() > 120 || context.length()>120)
         return false;
 
-    
     unsigned long hash = str_hash(key);
 
     Node n;
     Node newN;
-    newN.key = new char[key.length()+1];
     strcpy(newN.key, key.c_str());
-    newN.value = new char[value.length()+1];
     strcpy(newN.value, value.c_str());
-    newN.context = new char[context.length()+1];
     strcpy(newN.context, context.c_str());
     
     unsigned int bucketN = sizeof(BasicInfo)+(hash%m_bi.m_buckets)*sizeof(unsigned int);
@@ -111,6 +109,7 @@ bool DiskMultiMap::insert(const std::string& key, const std::string& value, cons
                         m_bi.m_next_free += sizeof(Node);
                     }
                     newN.offset = n.next_K;
+                    m_file.write(n, n.offset);
                     if(!m_file.write(newN, n.next_K)){
                         cerr<<"Failed to write insert1."<<endl;
                         return false;
@@ -132,6 +131,7 @@ bool DiskMultiMap::insert(const std::string& key, const std::string& value, cons
                         m_bi.m_next_free += sizeof(Node);
                     }
                     newN.offset = n.next_H;
+                    m_file.write(n, n.offset);
                     if(!m_file.write(newN, n.next_H)){
                         cerr<<"Failed to write insert2."<<endl;
                         return false;
@@ -144,6 +144,10 @@ bool DiskMultiMap::insert(const std::string& key, const std::string& value, cons
                 return false;
             }
         }
+        newN.offset = m_bi.m_next_free;
+        m_file.write(newN, newN.offset);
+        m_file.write(newN.offset, bucketN);
+        m_bi.m_next_free += sizeof(newN);
     }
     else{
         cerr<<"Failed to read insert5."<<endl;
@@ -153,7 +157,28 @@ bool DiskMultiMap::insert(const std::string& key, const std::string& value, cons
 }
 
 
-
+DiskMultiMap::Iterator DiskMultiMap::search(const std::string& key){
+    if(!m_file.isOpen())
+        return Iterator();
+    
+    if(key.length()>120)
+        return Iterator();
+    
+    unsigned long hash = str_hash(key);
+    unsigned int bucketN = sizeof(BasicInfo)+(hash%m_bi.m_buckets)*sizeof(unsigned int);
+    unsigned int offset;
+    Node n;
+    
+    m_file.read(offset, bucketN);
+    if(offset == 0)
+        return Iterator();
+    
+    while(offset != 0){
+        
+    }
+    return Iterator();
+    
+}
 
 
 int DiskMultiMap::erase(const std::string& key, const std::string& value, const std::string& context){
@@ -168,15 +193,12 @@ int DiskMultiMap::erase(const std::string& key, const std::string& value, const 
     Node n3;
     Node n4;
     Node nT;
-    nT.key = new char[key.length()+1];
     strcpy(nT.key, key.c_str());
-    nT.value = new char[value.length()+1];
     strcpy(nT.value, value.c_str());
-    nT.context = new char[context.length()+1];
     strcpy(nT.context, context.c_str());
     int count = 0;
     unsigned long hash = str_hash(key);
-    unsigned int bucketN = 12+(hash%m_bi.m_buckets)*sizeof(unsigned int);
+    unsigned int bucketN = sizeof(BasicInfo)+(hash%m_bi.m_buckets)*sizeof(unsigned int);
     unsigned int offset;
     
     if(m_file.read(offset, bucketN)){
@@ -206,14 +228,50 @@ int DiskMultiMap::erase(const std::string& key, const std::string& value, const 
                        strcmp(n2.context, nT.context) == 0){
                         if(i == 0){
                             if(n2.next_K == 0){
-                                deleteNode(offset);
-                                m_file.write((unsigned int) 0, bucketN);
-                                return count;
+                                if(!m_file.write(n2.next_H, bucketN)){
+                                    cerr<<"Fail to write."<<endl;
+                                    return -1;
+                                }
                             }
                             else{
-                                m_file.write(n2.next_K, bucketN);
-                                deleteNode(offset);
+                                if(!m_file.read(n1, n2.next_K)){
+                                    cerr<<"Fail to read."<<endl;
+                                    return -1;
+                                }
+                                n1.next_H = n2.next_H;
+                                if(!m_file.write(n2.next_K, bucketN)){
+                                    cerr<<"Fail to write."<<endl;
+                                    return -1;
+                                }
+                                if(!m_file.write(n1, n1.offset)){
+                                    cerr<<"Fail to write."<<endl;
+                                    return -1;
+                                }
                             }
+                            deleteNode(offset);
+                            count++;
+                            return count;
+                        }
+                        else{
+                            if(n2.next_K == 0){
+                                n4.next_H = n2.next_H;
+                                if(!m_file.write(n4, n4.offset)){
+                                    cerr<<"Fail to write."<<endl;
+                                    return -1;
+                                }
+
+                            }
+                            else{
+                                if(!m_file.read(n1, n2.next_K)){
+                                    cerr<<"Fail to read."<<endl;
+                                    return -1;
+                                }
+                                n4.next_H = n1.offset;
+                                n1.next_H = n2.next_H;
+                            }
+                            deleteNode(n2.offset);
+                            count++;
+                            return count;
                         }
                     }
                 }
@@ -232,7 +290,6 @@ int DiskMultiMap::erase(const std::string& key, const std::string& value, const 
         cerr<<"Failed to read."<<endl;
         return -1;
     }
-    
     return count;
     
 }
@@ -255,3 +312,69 @@ void DiskMultiMap::deleteNode(unsigned int offset){
         }
     }
 }
+
+void DiskMultiMap::runthrough(){
+    for(int i = 0; i<m_bi.m_buckets; i++){
+        unsigned int offset;
+        unsigned int index = sizeof(m_bi) + i*sizeof(unsigned int);
+        m_file.read(offset, index);
+        if(offset == 0)
+            continue;
+        Node n;
+        m_file.read(n, offset);
+        Node m;
+        while(true){
+            m=n;
+            while(true){
+                cout<<n.key << " " << n.value << " " << n.context << endl;
+                if(n.next_K!=0)
+                    m_file.read(n, n.next_K);
+                else
+                    break;
+            }
+            if(m.next_H != 0)
+                m_file.read(n, m.next_H);
+            else break;
+        }
+            
+        
+    }
+//    for(int i = 0; i<16; i+=4){
+//        unsigned int n;
+//        m_file.read(n, i);
+//        cerr<<n<<endl;
+//    }
+}
+
+
+/////////////////////////////////////////////////////////////////////////
+//                                Iterator
+/////////////////////////////////////////////////////////////////////////
+
+
+DiskMultiMap::Iterator::Iterator()
+:m_isValid(false), m_cursor(0)
+{
+    
+}
+
+DiskMultiMap::Iterator::Iterator(BinaryFile* bf, unsigned int cursor)
+:m_cursor(cursor), m_bf(bf), m_isValid(true)
+{
+    
+}
+
+
+bool DiskMultiMap::Iterator::isValid() const{
+    return m_isValid;
+}
+//
+//DiskMultiMap::Iterator& DiskMultiMap::Iterator::operator++(){
+//    if(!m_isValid)
+//        return *this;
+//    return nullptr;
+//}
+//
+//MultiMapTuple DiskMultiMap::Iterator::operator*(){
+//    
+//}
