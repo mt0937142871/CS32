@@ -10,9 +10,10 @@
 #define INTELWEB_H_
 
 #include "InteractionTuple.h"
+#include "provided-DiskMultiMap.h"
 #include <string>
 #include <vector>
-
+using namespace std;
 class IntelWeb
 {
 public:
@@ -30,6 +31,10 @@ public:
     bool purge(const std::string& entity);
     
 private:
+    DiskMultiMap m_KeyValueMap;
+    DiskMultiMap m_ValueKeyMap;
+    unsigned int m_MaxData;
+    string m_prefix;
     // Your private member declarations will go here
 };
 
