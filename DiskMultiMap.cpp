@@ -170,10 +170,13 @@ DiskMultiMap::Iterator DiskMultiMap::search(const std::string& key){
     Node n;
     
     m_file.read(offset, bucketN);
-    if(offset == 0)
-        return Iterator();
     
     while(offset != 0){
+        m_file.read(n, offset);
+        if(strcmp(n.key, key.c_str())==0){
+            return Iterator(&m_file, offset);
+        }
+        offset = n.next_H;
         
     }
     return Iterator();
@@ -314,6 +317,8 @@ void DiskMultiMap::deleteNode(unsigned int offset){
 }
 
 void DiskMultiMap::runthrough(){
+    cout<<"offset\tkey\tvalue\tcont\tnext_H\tnext_K"<<endl;
+
     for(int i = 0; i<m_bi.m_buckets; i++){
         unsigned int offset;
         unsigned int index = sizeof(m_bi) + i*sizeof(unsigned int);
@@ -326,7 +331,7 @@ void DiskMultiMap::runthrough(){
         while(true){
             m=n;
             while(true){
-                cout<<n.key << " " << n.value << " " << n.context << endl;
+                cout<<n.offset<<"\t"<<n.key << "\t" << n.value << "\t" << n.context << "\t" << n.next_H << "\t" << n.next_K<<endl;
                 if(n.next_K!=0)
                     m_file.read(n, n.next_K);
                 else
@@ -339,11 +344,18 @@ void DiskMultiMap::runthrough(){
             
         
     }
-//    for(int i = 0; i<16; i+=4){
-//        unsigned int n;
-//        m_file.read(n, i);
-//        cerr<<n<<endl;
-//    }
+    for(int i = 0; i<16; i+=4){
+        unsigned int n;
+        m_file.read(n, i);
+        cerr<<n<<endl;
+    }
+    
+    
+    for(int i = 0; i<m_bi.m_buckets; i++){
+        
+    }
+    
+    
 }
 
 
@@ -361,20 +373,42 @@ DiskMultiMap::Iterator::Iterator()
 DiskMultiMap::Iterator::Iterator(BinaryFile* bf, unsigned int cursor)
 :m_cursor(cursor), m_bf(bf), m_isValid(true)
 {
-    
 }
 
 
 bool DiskMultiMap::Iterator::isValid() const{
     return m_isValid;
 }
-//
-//DiskMultiMap::Iterator& DiskMultiMap::Iterator::operator++(){
-//    if(!m_isValid)
-//        return *this;
-//    return nullptr;
-//}
-//
-//MultiMapTuple DiskMultiMap::Iterator::operator*(){
-//    
-//}
+
+DiskMultiMap::Iterator& DiskMultiMap::Iterator::operator++(){
+    if(!m_isValid)
+        return *this;
+    
+    Node n;
+    m_bf->read(n, m_cursor);
+    
+    if(n.next_K == 0)
+        m_isValid = false;
+    else
+        m_cursor = n.next_K;
+    
+    return *this;
+}
+
+MultiMapTuple DiskMultiMap::Iterator::operator*(){
+    MultiMapTuple m;
+    if(!m_isValid)
+    {
+        m.key = "";
+        m.value = "";
+        m.context = "";
+        return m;
+    }
+    
+    Node n;
+    m_bf->read(n, m_cursor);
+    m.key = n.key;
+    m.value = n.value;
+    m.context = n.context;
+    return m;
+}

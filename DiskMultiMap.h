@@ -34,7 +34,15 @@ public:
         unsigned int m_cursor;
         BinaryFile* m_bf;
 
-        
+        struct Node{
+            char key[121];
+            char value[121];
+            char context[121];
+            unsigned int next_H=0;  //offset of next with same hash
+            //value, different key.
+            unsigned int next_K=0;  //offset of next with same key
+            unsigned int offset=0;
+        };
         // Your private member declarations will go here
     };
     
