@@ -7,9 +7,9 @@
 //
 
 #include "IntelWeb.h"
-
-
-
+#include <sstream>
+#include <set>
+#include <queue>
 
 
 
@@ -49,12 +49,67 @@ void IntelWeb::close(){
 }
 bool IntelWeb::ingest(const std::string& telemetryFile){
     
+    ifstream inf(telemetryFile);
+		  // Test for failure to open
+    if ( ! inf)
+    {
+        cout << "Cannot open expenses file!" << endl;
+        return false;
+    }
+    string s;
+    
+    while(getline(inf, s))
+    {
+        istringstream iss(s);
+        vector<string> a{istream_iterator<string>{iss},
+            istream_iterator<string>{}};
+        
+        m_KeyValueMap.insert(a[1], a[2], a[0]);
+        m_ValueKeyMap.insert(a[2], a[1], a[0]);
+        
+    }
+    return true;
 }
 unsigned int IntelWeb::crawl(const std::vector<std::string>& indicators,
                    unsigned int minPrevalenceToBeGood,
                    std::vector<std::string>& badEntitiesFound,
                    std::vector<InteractionTuple>& interactions
                              ){
+    //priority_queue<string> pq(string, badEntitiesFound, string);
+    set<string> notTest;
+    set<string> tested;
+    
+    for(int i = 0; i<indicators.size(); i++){
+        bool visited = false;
+        for(DiskMultiMap::Iterator it = m_KeyValueMap.search(indicators[i]); it.isValid(); ++it){
+            visited = true;
+            notTest.insert((*it).value);
+        }
+        for(DiskMultiMap::Iterator it = m_ValueKeyMap.search(indicators[i]); it.isValid(); ++it){
+            visited = true;
+            notTest.insert((*it).value);
+        }
+        if(visited)
+            badEntitiesFound.push_back(indicators[i]);
+        tested.insert(indicators[i]);
+    }
+    
+    while(!notTest.empty()){
+        int count = 0;
+        string s = *(notTest.begin());
+        set<string> pending;
+        for(DiskMultiMap::Iterator it = m_KeyValueMap.search(s); it.isValid(); ++it){
+            count++;
+            if(tested.find((*it).value) == tested.end())
+                pending.insert((*it).value);
+        }
+        for(DiskMultiMap::Iterator it = m_KeyValueMap.search(s); it.isValid(); ++it){
+            count++;
+            if(tested.find((*it).value) == tested.end())
+                pending.insert((*it).value);
+        }
+        
+    }
     
 }
 bool IntelWeb::purge(const std::string& entity){
