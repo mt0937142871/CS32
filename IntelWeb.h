@@ -37,14 +37,27 @@ private:
     unsigned int m_MaxData;
     string m_prefix;
     
-    static bool InteractionTupleCmp(const InteractionTuple& a, const InteractionTuple& b) {
+    struct classcomp {
+        bool operator() (const InteractionTuple& a, const InteractionTuple& b) {
             if(a.context == b.context){
                 if(a.from == b.from){
                     return a.to<b.to;}
                 else{
                     return a.from < b.from;}}
             return a.context < b.context;
+        };
     };
+    static bool InteractionTupleCmp(const InteractionTuple& a, const InteractionTuple& b) {
+        if(a.context == b.context){
+            if(a.from == b.from){
+                return a.to<b.to;}
+            else{
+                return a.from < b.from;}}
+        return a.context < b.context;
+    };
+
+    
+
     // Your private member declarations will go here
 };
 

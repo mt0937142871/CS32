@@ -75,10 +75,9 @@ unsigned int IntelWeb::crawl(const std::vector<std::string>& indicators,
                    std::vector<std::string>& badEntitiesFound,
                    std::vector<InteractionTuple>& interactions
                              ){
-    //priority_queue<string> pq(string, badEntitiesFound, string);
     set<string> notTest;
     set<string> tested;
-    set<InteractionTuple> tuples;
+    set<InteractionTuple, classcomp> tuples;
     for(int i = 0; i<indicators.size(); i++){
         bool visited = false;
         for(DiskMultiMap::Iterator it = m_KeyValueMap.search(indicators[i]); it.isValid(); ++it){
@@ -89,8 +88,10 @@ unsigned int IntelWeb::crawl(const std::vector<std::string>& indicators,
             visited = true;
             notTest.insert((*it).value);
         }
-        if(visited)
+        if(visited){
             badEntitiesFound.push_back(indicators[i]);
+            notTest.insert(indicators[i]);
+        }
         tested.insert(indicators[i]);
     }
     
@@ -98,7 +99,7 @@ unsigned int IntelWeb::crawl(const std::vector<std::string>& indicators,
         int prevalence = 0;
         string s = *(notTest.begin());
         set<string> pending;
-        set<InteractionTuple> pendingT;
+        set<InteractionTuple, classcomp > pendingT;
         for(DiskMultiMap::Iterator it = m_KeyValueMap.search(s); it.isValid(); ++it){
             prevalence++;
             if(tested.find((*it).value) == tested.end()){
@@ -118,9 +119,10 @@ unsigned int IntelWeb::crawl(const std::vector<std::string>& indicators,
             tuples.insert(pendingT.begin(), pendingT.end());
             badEntitiesFound.push_back(s);
         }
+        notTest.erase(s);
         tested.insert(s);
     }
-    
+
     copy(tuples.begin(), tuples.end(), std::back_inserter(interactions));
     sort(badEntitiesFound.begin(), badEntitiesFound.end());
     sort(interactions.begin(), interactions.end(), InteractionTupleCmp);
