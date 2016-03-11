@@ -10,7 +10,7 @@
 #include <sstream>
 #include <set>
 #include <queue>
-
+#include <algorithm>
 
 
 IntelWeb::IntelWeb()
@@ -78,7 +78,7 @@ unsigned int IntelWeb::crawl(const std::vector<std::string>& indicators,
     //priority_queue<string> pq(string, badEntitiesFound, string);
     set<string> notTest;
     set<string> tested;
-    
+    set<InteractionTuple> tuples;
     for(int i = 0; i<indicators.size(); i++){
         bool visited = false;
         for(DiskMultiMap::Iterator it = m_KeyValueMap.search(indicators[i]); it.isValid(); ++it){
@@ -95,23 +95,68 @@ unsigned int IntelWeb::crawl(const std::vector<std::string>& indicators,
     }
     
     while(!notTest.empty()){
-        int count = 0;
+        int prevalence = 0;
         string s = *(notTest.begin());
         set<string> pending;
+        set<InteractionTuple> pendingT;
         for(DiskMultiMap::Iterator it = m_KeyValueMap.search(s); it.isValid(); ++it){
-            count++;
-            if(tested.find((*it).value) == tested.end())
+            prevalence++;
+            if(tested.find((*it).value) == tested.end()){
                 pending.insert((*it).value);
+                pendingT.insert(InteractionTuple((*it).key, (*it).value, (*it).context));
+            }
         }
-        for(DiskMultiMap::Iterator it = m_KeyValueMap.search(s); it.isValid(); ++it){
-            count++;
-            if(tested.find((*it).value) == tested.end())
+        for(DiskMultiMap::Iterator it = m_ValueKeyMap.search(s); it.isValid(); ++it){
+            prevalence++;
+            if(tested.find((*it).value) == tested.end()){
                 pending.insert((*it).value);
+                pendingT.insert(InteractionTuple((*it).value, (*it).key, (*it).context));
+            }
         }
-        
+        if(prevalence < minPrevalenceToBeGood){
+            notTest.insert(pending.begin(), pending.end());
+            tuples.insert(pendingT.begin(), pendingT.end());
+            badEntitiesFound.push_back(s);
+        }
+        tested.insert(s);
     }
     
+    copy(tuples.begin(), tuples.end(), std::back_inserter(interactions));
+    sort(badEntitiesFound.begin(), badEntitiesFound.end());
+    sort(interactions.begin(), interactions.end(), InteractionTupleCmp);
+    return (unsigned int)badEntitiesFound.size();
 }
 bool IntelWeb::purge(const std::string& entity){
+    DiskMultiMap::Iterator it = m_KeyValueMap.search(entity);
+    if(!it.isValid())
+        return false;
     
+    for(; it.isValid(); ++it){
+        MultiMapTuple mt = *it;
+        DiskMultiMap::Iterator it2 = m_ValueKeyMap.search(mt.value);
+        for(; it2.isValid();){
+            MultiMapTuple mt2 = *it2;
+            if(mt2.value == mt.key){
+                if(m_KeyValueMap.erase(mt2.value, mt2.key, mt2.context)&&
+                   m_ValueKeyMap.erase(mt2.key, mt2.value, mt2.context)){
+                    it2 = m_ValueKeyMap.search(mt.value);
+                    continue;
+                }
+                else
+                    return false;
+            }
+            ++it2;
+        }
+    }
+    it = m_KeyValueMap.search(entity);
+    while(it.isValid()){
+        string key = (*it).key;
+        string value = (*it).value;
+        string context = (*it).context;
+        if(!m_KeyValueMap.erase(key,value,context))
+            return false;
+        it = m_KeyValueMap.search(entity);
+    }
+        
+    return true;
 }
